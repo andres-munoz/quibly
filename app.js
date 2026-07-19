@@ -25,7 +25,48 @@ function normalize(text) {
 function detectLanguage(text) {
   const value = normalize(text);
   const englishWords = /\b(hello|hi|what|who|how|where|when|why|is|are|the|your|you|thanks|please|learn|remember)\b/;
-  return englishWords.test(value) ? 'en' : 'es';
+  const firstWord = value.split(' ')[0];
+  const englishGreetingWithTypo = ['hello', 'thanks', 'goodbye'].some(word => editDistance(firstWord, word) <= 1);
+  return englishWords.test(value) || englishGreetingWithTypo ? 'en' : 'es';
+}
+
+const spellingLexicon = {
+  es: ['hola','buenas','gracias','adios','como','estas','cual','cuanto','cuantos','que','quien','donde','cuando','porque','explica','explicame','capital','nombre','puedes','hacer','calcula','aprende','recuerda','pato','patos','tierra','luna','sol','agua','planetas','españa','francia','japon','hoy','hora','fecha','favor'],
+  en: ['hello','hi','thanks','goodbye','how','what','which','who','where','when','why','explain','capital','name','your','can','calculate','learn','remember','duck','ducks','earth','moon','sun','water','planets','spain','france','japan','today','time','date','please']
+};
+
+function editDistance(a, b) {
+  const matrix = Array.from({ length: a.length + 1 }, (_, row) => [row]);
+  for (let column = 1; column <= b.length; column += 1) matrix[0][column] = column;
+  for (let row = 1; row <= a.length; row += 1) {
+    for (let column = 1; column <= b.length; column += 1) {
+      const cost = a[row - 1] === b[column - 1] ? 0 : 1;
+      matrix[row][column] = Math.min(
+        matrix[row - 1][column] + 1,
+        matrix[row][column - 1] + 1,
+        matrix[row - 1][column - 1] + cost
+      );
+      if (row > 1 && column > 1 && a[row - 1] === b[column - 2] && a[row - 2] === b[column - 1]) {
+        matrix[row][column] = Math.min(matrix[row][column], matrix[row - 2][column - 2] + 1);
+      }
+    }
+  }
+  return matrix[a.length][b.length];
+}
+
+function correctSpelling(value, lang) {
+  return value.split(' ').map(word => {
+    if (word.length < 3 || /\d/.test(word) || spellingLexicon[lang].includes(word)) return word;
+    let best = word;
+    let bestDistance = Infinity;
+    for (const candidate of spellingLexicon[lang]) {
+      if (Math.abs(candidate.length - word.length) > 1) continue;
+      const distance = editDistance(word, candidate);
+      if (distance < bestDistance) { best = candidate; bestDistance = distance; }
+    }
+    const limit = word.length >= 7 ? 2 : 1;
+    return bestDistance <= limit ? best : word;
+  }).join(' ');
 }
 
 function loadMemory() {
@@ -82,11 +123,11 @@ function recallFact(value, lang) {
   return null;
 }
 
-async function searchWikipedia(question, lang) {
+async function searchWikipedia(question, lang, detailed = false) {
   const host = lang === 'en' ? 'en.wikipedia.org' : 'es.wikipedia.org';
   const params = new URLSearchParams({
     action: 'query', generator: 'search', gsrsearch: question, gsrlimit: '1',
-    prop: 'extracts|info', exintro: '1', explaintext: '1', exsentences: '3',
+    prop: 'extracts|info', exintro: '1', explaintext: '1', exsentences: detailed ? '5' : '2',
     inprop: 'url', format: 'json', origin: '*'
   });
   try {
@@ -127,47 +168,55 @@ async function readWebSource(rawUrl) {
 }
 
 async function answer(text) {
-  const value = normalize(text);
   const lang = detectLanguage(text);
-  const learned = learnFact(text, lang);
-  if (learned) return learned;
-
-  if (/^(hola|buenas|buenos dias|buenas tardes|buenas noches|hello|hi|hey)\b/.test(value)) {
-    return lang === 'en' ? 'Hello! I am Quibly. What would you like to know?' : '¡Hola! Soy Quibly. ¿Qué te gustaría saber?';
+  let value = correctSpelling(normalize(text), lang);
+  const greetingPattern = /^(hola|buenas|buenos dias|buenas tardes|buenas noches|hello|hi|hey)\b/;
+  const greeting = value.match(greetingPattern);
+  let greetingPrefix = '';
+  if (greeting) {
+    greetingPrefix = lang === 'en' ? 'Hello!' : '¡Hola!';
+    value = value.slice(greeting[0].length).trim();
+    if (!value) return lang === 'en' ? 'Hello! I am Quibly. What would you like to know?' : '¡Hola! Soy Quibly. ¿Qué te gustaría saber?';
   }
+  const polite = /\b(por favor|please)\b/.test(value);
+  const respond = response => `${greetingPrefix}${greetingPrefix ? ' ' : ''}${polite && !greetingPrefix ? (lang === 'en' ? 'Of course. ' : 'Claro. ') : ''}${response}`;
+  const detailed = /\b(explica|explicame|detalla|detalladamente|por que|explain|in detail|why)\b/.test(value);
+
+  const learned = learnFact(value, lang);
+  if (learned) return respond(learned);
   if (/(como estas|que tal|how are you)/.test(value)) {
-    return lang === 'en' ? 'I am very well and eager to keep learning with you.' : 'Estoy muy bien y tengo muchas ganas de seguir aprendiendo contigo.';
+    return respond(lang === 'en' ? 'I am very well and eager to keep learning with you.' : 'Estoy muy bien y tengo muchas ganas de seguir aprendiendo contigo.');
   }
   if (/\b(gracias|muchas gracias|thanks|thank you)\b/.test(value)) {
-    return lang === 'en' ? 'You are welcome! I am happy to help.' : '¡De nada! Me alegra poder ayudarte.';
+    return respond(lang === 'en' ? 'You are welcome! I am happy to help.' : '¡De nada! Me alegra poder ayudarte.');
   }
   if (/\b(adios|hasta luego|bye|goodbye)\b/.test(value)) {
-    return lang === 'en' ? 'Goodbye! I hope we can talk again soon.' : '¡Adiós! Espero que volvamos a hablar pronto.';
+    return respond(lang === 'en' ? 'Goodbye! I hope we can talk again soon.' : '¡Adiós! Espero que volvamos a hablar pronto.');
   }
 
   const mathAnswer = simpleMath(value, lang);
-  if (mathAnswer) return mathAnswer;
+  if (mathAnswer) return respond(mathAnswer);
 
   const remembered = recallFact(value, lang);
-  if (remembered) return remembered;
+  if (remembered) return respond(remembered);
 
   const fact = knowledge.find(item => item.keys.some(key => value.includes(normalize(key))));
-  if (fact) return fact[lang];
+  if (fact) return respond(fact[lang]);
 
   if (/(que hora|what time)/.test(value)) {
     const time = new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'es-ES', { hour: '2-digit', minute: '2-digit' }).format(new Date());
-    return lang === 'en' ? `It is ${time} on your device.` : `En tu dispositivo son las ${time}.`;
+    return respond(lang === 'en' ? `It is ${time} on your device.` : `En tu dispositivo son las ${time}.`);
   }
   if (/(que dia|fecha|what day|date today)/.test(value)) {
     const date = new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'es-ES', { dateStyle: 'long' }).format(new Date());
-    return lang === 'en' ? `Today is ${date}.` : `Hoy es ${date}.`;
+    return respond(lang === 'en' ? `Today is ${date}.` : `Hoy es ${date}.`);
   }
 
-  const webAnswer = await searchWikipedia(text, lang);
-  if (webAnswer) return webAnswer;
-  return lang === 'en'
+  const webAnswer = await searchWikipedia(value, lang, detailed);
+  if (webAnswer) return respond(webAnswer);
+  return respond(lang === 'en'
     ? 'I could not find a reliable answer. You can teach me by writing “Learn that X is Y” or by adding a source in the Teach section.'
-    : 'No he encontrado una respuesta fiable. Puedes enseñármela escribiendo «Aprende que X es Y» o añadiendo una fuente en Enseñar.';
+    : 'No he encontrado una respuesta fiable. Puedes enseñármela escribiendo «Aprende que X es Y» o añadiendo una fuente en Enseñar.');
 }
 
 function showView(id) {
