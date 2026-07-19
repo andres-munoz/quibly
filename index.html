@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Quibly, un pequeño asistente virtual que aprende contigo.">
+  <title>Quibly · Tu IA en crecimiento</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <aside class="sidebar">
+      <button class="brand" data-view="inicio" aria-label="Ir al inicio">
+        <img src="assets/quibly-logo.png" alt="Quibly, pato con pajarita y una Q">
+        <span><strong>Quibly</strong><small>Tu IA en crecimiento</small></span>
+      </button>
+      <nav aria-label="Navegación principal">
+        <button class="nav-item active" data-view="inicio"><span>⌂</span>Inicio</button>
+        <button class="nav-item" data-view="chat"><span>●</span>Hablar con Quibly</button>
+        <button class="nav-item" data-view="aprender"><span>＋</span>Enseñar a Quibly</button>
+        <button class="nav-item" data-view="memoria"><span>◇</span>Lo que recuerda</button>
+        <button class="nav-item" data-view="ajustes"><span>⚙</span>Configuración</button>
+        <button class="nav-item" data-view="ayuda"><span>?</span>Ayuda</button>
+      </nav>
+      <div class="level"><b>Q</b><span><strong>Nivel principiante</strong><small>Quibly acaba de nacer</small></span></div>
+    </aside>
+
+    <section class="workspace">
+      <header><span><i></i>Quibly está despierto</span><b>Tú</b></header>
+      <div class="content">
+        <section id="inicio" class="view home active">
+          <div class="welcome">
+            <small>UN PEQUEÑO PATO CON MUCHO QUE APRENDER</small>
+            <h1>Hola, soy <em>Quibly</em>.</h1>
+            <p>Soy un asistente virtual que crecerá contigo. Puedes hablarme, enseñarme cosas nuevas y comprobar todo lo que recuerdo.</p>
+            <div class="actions"><button class="primary" data-view="chat">Hablar con Quibly →</button><button data-view="aprender">Enseñarle algo</button></div>
+          </div>
+          <div class="mascot"><div>¡Cuac! ¿Qué aprenderemos hoy?</div><img src="assets/quibly-logo.png" alt="Mascota Quibly"></div>
+          <div class="cards">
+            <button data-view="chat"><b>●</b><strong>Conversa</strong><small>Escribe un mensaje y empieza a conocer a Quibly.</small></button>
+            <button data-view="aprender"><b>＋</b><strong>Enséñale</strong><small>Comparte información sencilla para ayudarle a crecer.</small></button>
+            <button data-view="memoria"><b>◇</b><strong>Revisa</strong><small>Consulta y controla siempre lo que ha aprendido.</small></button>
+          </div>
+        </section>
+
+        <section id="chat" class="view chat">
+          <div class="heading"><b>●</b><span><h2>Hablar con Quibly</h2><p>Una conversación sencilla para empezar a conoceros.</p></span></div>
+          <div class="chatbox"><div id="messages" class="messages"><div class="message quibly"><b>Q</b><p>¡Cuac! Soy Quibly. Todavía estoy aprendiendo, ¿hablamos?</p></div></div>
+            <form id="chat-form"><input id="chat-input" placeholder="Escribe algo a Quibly…" aria-label="Mensaje para Quibly"><button aria-label="Enviar">→</button></form>
+          </div>
+        </section>
+
+        <section id="aprender" class="view placeholder"><b>＋</b><h2>Enseñar a Quibly</h2><p>Aquí podrás compartir datos sencillos para que Quibly aprenda poco a poco contigo.</p><span>Próxima etapa de Quibly</span><button data-view="inicio">Volver al inicio</button></section>
+        <section id="memoria" class="view placeholder"><b>◇</b><h2>Lo que Quibly recuerda</h2><p>Esta zona mostrará los aprendizajes guardados y te permitirá corregirlos o eliminarlos.</p><span>Próxima etapa de Quibly</span><button data-view="inicio">Volver al inicio</button></section>
+        <section id="ajustes" class="view placeholder"><b>⚙</b><h2>Configuración</h2><p>Personaliza tu nombre, el tono de las respuestas y las preferencias de la aplicación.</p><span>Próxima etapa de Quibly</span><button data-view="inicio">Volver al inicio</button></section>
+        <section id="ayuda" class="view placeholder"><b>?</b><h2>¿Cómo funciona Quibly?</h2><p>Quibly empieza sabiendo muy poco. Puedes conversar con él, enseñarle y revisar siempre lo que recuerda.</p><span>Próxima etapa de Quibly</span><button data-view="inicio">Volver al inicio</button></section>
+      </div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
