@@ -185,6 +185,48 @@ function addMessage(from, text) {
   message.querySelector('p').textContent = text;
   messages.append(message);
   messages.scrollTop = messages.scrollHeight;
+  return message;
+}
+
+const thinkingMessages = {
+  es: [
+    'Buscando en el estanque…',
+    'Buscando…',
+    'Preguntando a otros patos…',
+    'Nadando entre conocimientos…',
+    'Revisando mis plumas de sabiduría…',
+    'Siguiendo las mejores pistas…'
+  ],
+  en: [
+    'Searching the pond…',
+    'Searching…',
+    'Asking other ducks…',
+    'Swimming through knowledge…',
+    'Checking my feathers of wisdom…',
+    'Following the best clues…'
+  ]
+};
+
+async function respondWithSearchEffect(text) {
+  const lang = detectLanguage(text);
+  const phrases = thinkingMessages[lang];
+  let phraseIndex = Math.floor(Math.random() * phrases.length);
+  const thinking = addMessage('quibly', phrases[phraseIndex]);
+  thinking.classList.add('thinking');
+  const paragraph = thinking.querySelector('p');
+  const interval = window.setInterval(() => {
+    phraseIndex = (phraseIndex + 1) % phrases.length;
+    paragraph.textContent = phrases[phraseIndex];
+  }, 900);
+
+  const [response] = await Promise.all([
+    answer(text),
+    new Promise(resolve => window.setTimeout(resolve, 1100))
+  ]);
+  window.clearInterval(interval);
+  thinking.classList.remove('thinking');
+  paragraph.textContent = response;
+  document.querySelector('#messages').scrollTop = document.querySelector('#messages').scrollHeight;
 }
 
 document.querySelectorAll('[data-view]').forEach(button => {
@@ -198,7 +240,7 @@ document.querySelector('#chat-form').addEventListener('submit', event => {
   if (!text) return;
   addMessage('user', text);
   input.value = '';
-  window.setTimeout(async () => addMessage('quibly', await answer(text)), 300);
+  window.setTimeout(() => respondWithSearchEffect(text), 250);
 });
 
 document.querySelector('#teach-form')?.addEventListener('submit', async event => {
