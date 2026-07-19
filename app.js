@@ -37,6 +37,12 @@ function saveMemory(memory) {
   localStorage.setItem(MEMORY_KEY, JSON.stringify(memory));
 }
 
+function remember(subject, fact, source = '') {
+  const memory = loadMemory();
+  memory[normalize(subject)] = { fact: fact.trim(), source: source.trim() };
+  saveMemory(memory);
+}
+
 function simpleMath(value, lang) {
   const match = value.match(/(?:cuanto es|calcula|what is|calculate)?\s*(-?\d+(?:[.,]\d+)?)\s*([+\-x×*/÷])\s*(-?\d+(?:[.,]\d+)?)/);
   if (!match) return null;
@@ -58,9 +64,7 @@ function learnFact(text, lang) {
     if (!match) continue;
     const subject = normalize(match[1]);
     const fact = match[2].trim();
-    const memory = loadMemory();
-    memory[subject] = fact;
-    saveMemory(memory);
+    remember(subject, fact);
     return lang === 'en' ? `I learned that ${match[1]} is ${fact}.` : `He aprendido que ${match[1]} es ${fact}.`;
   }
   return null;
@@ -68,13 +72,61 @@ function learnFact(text, lang) {
 
 function recallFact(value, lang) {
   const memory = loadMemory();
-  for (const [subject, fact] of Object.entries(memory)) {
-    if (value.includes(subject)) return lang === 'en' ? `${subject} is ${fact}.` : `${subject} es ${fact}.`;
+  for (const [subject, stored] of Object.entries(memory)) {
+    if (!value.includes(subject)) continue;
+    const fact = typeof stored === 'string' ? stored : stored.fact;
+    const source = typeof stored === 'string' ? '' : stored.source;
+    const base = lang === 'en' ? `${subject} is ${fact}.` : `${subject} es ${fact}.`;
+    return source ? `${base}\n${lang === 'en' ? 'Source' : 'Fuente'}: ${source}` : base;
   }
   return null;
 }
 
-function answer(text) {
+async function searchWikipedia(question, lang) {
+  const host = lang === 'en' ? 'en.wikipedia.org' : 'es.wikipedia.org';
+  const params = new URLSearchParams({
+    action: 'query', generator: 'search', gsrsearch: question, gsrlimit: '1',
+    prop: 'extracts|info', exintro: '1', explaintext: '1', exsentences: '3',
+    inprop: 'url', format: 'json', origin: '*'
+  });
+  try {
+    const response = await fetch(`https://${host}/w/api.php?${params}`);
+    if (!response.ok) throw new Error('Search failed');
+    const data = await response.json();
+    const page = Object.values(data.query?.pages || {})[0];
+    if (!page?.extract) return null;
+    const intro = lang === 'en' ? 'I found this information:' : 'He encontrado esta información:';
+    const source = page.fullurl || `https://${host}/wiki/${encodeURIComponent(page.title.replaceAll(' ', '_'))}`;
+    return `${intro}\n${page.extract}\n${lang === 'en' ? 'Source' : 'Fuente'}: ${source}`;
+  } catch {
+    return null;
+  }
+}
+
+async function readWebSource(rawUrl) {
+  const url = new URL(rawUrl);
+  const wikiMatch = url.hostname.match(/^(es|en)\.wikipedia\.org$/);
+  if (wikiMatch && url.pathname.startsWith('/wiki/')) {
+    const title = decodeURIComponent(url.pathname.slice(6)).replaceAll('_', ' ');
+    const params = new URLSearchParams({ action: 'query', prop: 'extracts', titles: title, exintro: '1', explaintext: '1', exsentences: '4', format: 'json', origin: '*' });
+    const response = await fetch(`${url.origin}/w/api.php?${params}`);
+    const data = await response.json();
+    const page = Object.values(data.query?.pages || {})[0];
+    if (!page?.extract) throw new Error('No readable content');
+    return { title: page.title, text: page.extract };
+  }
+
+  const response = await fetch(url.href, { headers: { Accept: 'text/html,text/plain' } });
+  if (!response.ok) throw new Error('Page unavailable');
+  const html = await response.text();
+  const documentSource = new DOMParser().parseFromString(html, 'text/html');
+  documentSource.querySelectorAll('script,style,noscript,nav,footer').forEach(node => node.remove());
+  const text = documentSource.body?.textContent.replace(/\s+/g, ' ').trim();
+  if (!text) throw new Error('No readable content');
+  return { title: documentSource.title || url.hostname, text: text.slice(0, 1200) };
+}
+
+async function answer(text) {
   const value = normalize(text);
   const lang = detectLanguage(text);
   const learned = learnFact(text, lang);
@@ -111,9 +163,11 @@ function answer(text) {
     return lang === 'en' ? `Today is ${date}.` : `Hoy es ${date}.`;
   }
 
+  const webAnswer = await searchWikipedia(text, lang);
+  if (webAnswer) return webAnswer;
   return lang === 'en'
-    ? 'I understand your question, but I have not learned that answer yet. You can teach me by writing: “Learn that X is Y”.'
-    : 'Entiendo tu pregunta, pero todavía no he aprendido esa respuesta. Puedes enseñármela escribiendo: «Aprende que X es Y».';
+    ? 'I could not find a reliable answer. You can teach me by writing “Learn that X is Y” or by adding a source in the Teach section.'
+    : 'No he encontrado una respuesta fiable. Puedes enseñármela escribiendo «Aprende que X es Y» o añadiendo una fuente en Enseñar.';
 }
 
 function showView(id) {
@@ -144,5 +198,33 @@ document.querySelector('#chat-form').addEventListener('submit', event => {
   if (!text) return;
   addMessage('user', text);
   input.value = '';
-  window.setTimeout(() => addMessage('quibly', answer(text)), 300);
+  window.setTimeout(async () => addMessage('quibly', await answer(text)), 300);
+});
+
+document.querySelector('#teach-form')?.addEventListener('submit', async event => {
+  event.preventDefault();
+  const subjectInput = document.querySelector('#teach-subject');
+  const factInput = document.querySelector('#teach-fact');
+  const urlInput = document.querySelector('#teach-url');
+  const status = document.querySelector('#teach-status');
+  let subject = subjectInput.value.trim();
+  let fact = factInput.value.trim();
+  const source = urlInput.value.trim();
+  status.textContent = 'Quibly está leyendo y aprendiendo…';
+
+  try {
+    if (source && !fact) {
+      const page = await readWebSource(source);
+      subject ||= page.title;
+      fact = page.text;
+    }
+    if (!subject || !fact) throw new Error('missing');
+    remember(subject, fact, source);
+    status.textContent = `¡Aprendido! Ya puedo responder preguntas relacionadas con “${subject}”.`;
+    event.target.reset();
+  } catch {
+    status.textContent = source
+      ? 'No he podido leer esa página automáticamente. Escribe también un resumen en “Información” y guardaré la URL como fuente.'
+      : 'Escribe un tema y la información que quieres enseñarme.';
+  }
 });
